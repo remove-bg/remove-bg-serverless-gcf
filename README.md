@@ -1,10 +1,9 @@
-# sam-app
+# remove-bg-serverless
 
 This project contains source code and supporting files for a serverless application that you can deploy with the SAM CLI. It includes the following files and folders.
 
-- hello-world - Code for the application's Lambda function.
-- events - Invocation events that you can use to invoke the function.
-- hello-world/tests - Unit tests for the application code. 
+- remove-bg-serverless - Code for the application's Lambda function.
+- remove-bg-serverless/tests - Unit tests for the application code. 
 - template.yaml - A template that defines the application's AWS resources.
 
 The application uses several AWS resources, including Lambda functions and an API Gateway API. These resources are defined in the `template.yaml` file in this project. You can update the template to add AWS resources through the same deployment process that updates your application code.
@@ -52,17 +51,9 @@ Build your application with the `sam build` command.
 sam-app$ sam build
 ```
 
-The SAM CLI installs dependencies defined in `hello-world/package.json`, creates a deployment package, and saves it in the `.aws-sam/build` folder.
+The SAM CLI installs dependencies defined in `remove-bg-serverless/package.json`, creates a deployment package, and saves it in the `.aws-sam/build` folder.
 
-Test a single function by invoking it directly with a test event. An event is a JSON document that represents the input that the function receives from the event source. Test events are included in the `events` folder in this project.
-
-Run functions locally and invoke them with the `sam local invoke` command.
-
-```bash
-sam-app$ sam local invoke HelloWorldFunction --event events/event.json
-```
-
-The SAM CLI can also emulate your application's API. Use the `sam local start-api` to run the API locally on port 3000.
+The SAM CLI can emulate your application's API. Use the `sam local start-api` to run the API locally on port 3000.
 
 ```bash
 sam-app$ sam local start-api
@@ -73,10 +64,10 @@ The SAM CLI reads the application template to determine the API's routes and the
 
 ```yaml
       Events:
-        HelloWorld:
+        RemoveBg:
           Type: Api
           Properties:
-            Path: /hello
+            Path: /removebg
             Method: get
 ```
 
@@ -90,19 +81,19 @@ To simplify troubleshooting, SAM CLI has a command called `sam logs`. `sam logs`
 `NOTE`: This command works for all AWS Lambda functions; not just the ones you deploy using SAM.
 
 ```bash
-sam-app$ sam logs -n HelloWorldFunction --stack-name sam-app --tail
+sam-app$ sam logs -n RemoveBg --stack-name sam-app --tail
 ```
 
 You can find more information and examples about filtering Lambda function logs in the [SAM CLI Documentation](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-logging.html).
 
 ## Unit tests
 
-Tests are defined in the `hello-world/tests` folder in this project. Use NPM to install the [Mocha test framework](https://mochajs.org/) and run unit tests.
+Tests are defined in the `remove-bg-serverless/tests` folder in this project. Use NPM to install the [Mocha test framework](https://mochajs.org/) and run unit tests.
 
 ```bash
-sam-app$ cd hello-world
-hello-world$ npm install
-hello-world$ npm run test
+sam-app$ cd remove-bg-serverless
+remove-bg-serverless$ npm install
+remove-bg-serverless$ npm run test
 ```
 
 ## Cleanup
@@ -124,3 +115,27 @@ Next, you can use AWS Serverless Application Repository to deploy ready to use A
 ```
 sam local start-api --env-vars .env.json -d 9999
 ```
+
+## Test api with Postman
+* Import the following curl command: 
+```
+curl --location --request POST 'https://api.remove.bg/v1.0/removebg' \
+--header 'accept: image/*' \
+--header 'Content-Type: application/x-www-form-urlencoded' \
+--header 'Cookie: __cfduid=d39c8324376cb912436e5780ad9b207e71612784693' \
+--form 'size="preview"' \
+--form 'image_file_b64=""' \
+--form 'position="original"' \
+--form 'bg_color=""' \
+--form 'scale="original"' \
+--form 'image_url="https://assets.orf.at/mims/2019/44/64/crops/w=800,q=70,r=1/350290_body_112064_ticker_meghan_afp.jpg?s=cb4a24ce5bb88c1c985c5451f90e2af8c4428d7a"' \
+--form 'roi="0% 0% 100% 100%"' \
+--form 'crop="false"' \
+--form 'channels="rgba"' \
+--form 'bg_image_url=""' \
+--form 'format="auto"' \
+--form 'type="auto"' \
+--form 'crop_margin="0"' \
+--form 'add_shadow="false"'
+```
+* Add the ´´´X-Api-Key``` header
