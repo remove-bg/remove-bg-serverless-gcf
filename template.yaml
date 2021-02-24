@@ -25,7 +25,6 @@ Resources:
             Method: post
       Environment:
         Variables:
-          REMOVEBG_API_KEY: ""
 
 Outputs:
   # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
