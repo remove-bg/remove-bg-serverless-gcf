@@ -2,6 +2,7 @@ const AWS = require('aws-sdk');
 const util = require('util');
 const FormData = require('form-data');
 const axios = require('axios');
+const busboy = require('busboy');
 
 // get reference to S3 client
 const s3 = new AWS.S3();
@@ -19,61 +20,44 @@ const s3 = new AWS.S3();
  * 
  */
 exports.lambdaHandler = async (event, context) => {
-    console.log("Reading options from event:\n", util.inspect(event, { depth: 5 }));
-    const srcBucket = event.Records[0].s3.bucket.name;
-    // Object key may have spaces or unicode non-ASCII characters.
-    const srcKey = decodeURIComponent(event.Records[0].s3.object.key.replace(/\+/g, " "));
-    const dstBucket = "removebg-dest";
-    const dstKey = srcKey.replace("-source", "-dest");
-
-    // Infer the image type from the file suffix.
-    const typeMatch = srcKey.match(/\.([^.]*)$/);
-    if (!typeMatch) {
-        console.log("Could not determine the image type.");
-        return;
-    }
-
-    console.log(srcBucket);
-    console.log(srcKey);
-
-    // Check that the image type is supported  
-    const imageType = typeMatch[1].toLowerCase();
-    if (imageType != "jpg" && imageType != "png") {
-        console.log(`Unsupported image type: ${imageType}`);
-        return;
-    }
-
-    const signedUrl = s3.getSignedUrl('getObject', {
-        Bucket: srcBucket,
-        Key: srcKey,
-        Expires: 3600
-    });
-
-    console.log("Presigned URL:", signedUrl)
-
+    console.log("lambda");
     try {
-        const params = {
-            Bucket: srcBucket,
-            Key: srcKey
-        };
-        var origimage = await s3.getObject(params).promise();
+        if (Object.entries(event).length === 0) {
+            console.log("no event data");
+            return new Error("no event data");
+        }
+        var contentType = event.headers['Content-Type'] || event.headers['content-type'];
+        var bb = new busboy({ headers: { 'content-type': contentType } });
 
-    } catch (error) {
-        console.log(error);
-        return;
-    }  
+        bb.on('file', function (fieldname, file, filename, encoding, mimetype) {
+            console.log('File [%s]: filename=%j; encoding=%j; mimetype=%j', fieldname, filename, encoding, mimetype);
 
-    try {
-        /*const parser = require("lambda-multipart-parser");
-        const parsedEventData = await parser.parse(event);
+            file
+                .on('data', data => console.log('File [%s] got %d bytes', fieldname, data.length))
+                .on('end', () => console.log('File [%s] Finished', fieldname));
+        })
+            .on('field', (fieldname, val) => console.log('Field [%s]: value: %j', fieldname, val))
+            .on('finish', () => {
+                console.log('Done parsing form!');
+                context.succeed({ statusCode: 200, body: 'all done', headers });
+            })
+            .on('error', err => {
+                console.log('failed', err);
+                context.fail({ statusCode: 500, body: err, headers });
+            });
+
+        bb.end(event.body);
+
+        const parser = require("lambda-multipart-parser");
+        const parsedEventData = await parser.parse(event, true);
         if (parsedEventData.files) {
             var err = "No file uploads supported";
             console.log(err);
             return err;
         }
-        //const { content, filename, contentType } = result.files[0];
+        const { content, filename, contentType2 } = result.files[0];
 
-        console.log(Object.keys(parsedEventData));*/
+        console.log(Object.keys(parsedEventData));
 
         var form = new FormData();
         form.append("image_url", signedUrl);
@@ -82,7 +66,7 @@ exports.lambdaHandler = async (event, context) => {
             url: 'https://api.remove.bg/v1.0/removebg',
             method: 'POST',
             headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
+                'Content-Type': 'application/form-data',
                 'X-Api-Key': process.env.REMOVEBG_API_KEY
             },
             data: form
