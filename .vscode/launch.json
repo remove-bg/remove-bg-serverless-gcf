@@ -23,7 +23,7 @@
         "type": "node",
         "request": "attach",
         "address": "localhost",
-        "port": 5858,
+        "port": 9999,
         // From the sam init example, it would be "${workspaceRoot}/hello-world"
         "localRoot": "${workspaceRoot}/remove-bg-serverless",
         "remoteRoot": "/var/task",

@@ -3,10 +3,14 @@ const util = require('util');
 const FormData = require('form-data');
 const axios = require('axios');
 const busboy = require('busboy');
+const fs = require('fs');
 
-// get reference to S3 client
-const s3 = new AWS.S3();
-
+const headers = {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'OPTIONS, POST',
+    'Access-Control-Allow-Headers': 'Content-Type'
+  };
 /**
  *
  * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
@@ -29,17 +33,25 @@ exports.lambdaHandler = async (event, context) => {
         var contentType = event.headers['Content-Type'] || event.headers['content-type'];
         var bb = new busboy({ headers: { 'content-type': contentType } });
 
+        var form = new FormData();
         bb.on('file', function (fieldname, file, filename, encoding, mimetype) {
             console.log('File [%s]: filename=%j; encoding=%j; mimetype=%j', fieldname, filename, encoding, mimetype);
 
             file
-                .on('data', data => console.log('File [%s] got %d bytes', fieldname, data.length))
-                .on('end', () => console.log('File [%s] Finished', fieldname));
+                .on('data', data => {
+                    console.log('File [%s] got %d bytes', fieldname, data.length);
+                })
+                .on('end', () => {
+                    console.log('File [%s] Finished', fieldname);
+                });
         })
-            .on('field', (fieldname, val) => console.log('Field [%s]: value: %j', fieldname, val))
+            .on('field', (fieldname, val) => {
+                form.append(fieldname, val);
+                console.log(fieldname, val);
+            })
             .on('finish', () => {
                 console.log('Done parsing form!');
-                context.succeed({ statusCode: 200, body: 'all done', headers });
+                //context.succeed({ statusCode: 200, body: 'all done', headers });
             })
             .on('error', err => {
                 console.log('failed', err);
@@ -50,61 +62,46 @@ exports.lambdaHandler = async (event, context) => {
 
         const parser = require("lambda-multipart-parser");
         const parsedEventData = await parser.parse(event, true);
-        if (parsedEventData.files) {
+        if (parsedEventData.files.length>0) {
             var err = "No file uploads supported";
             console.log(err);
+
+            const { content, filename, contentType2 } = parsedEventData.files[0];
+            console.log(Object.keys(parsedEventData));
+    
             return err;
         }
-        const { content, filename, contentType2 } = result.files[0];
 
-        console.log(Object.keys(parsedEventData));
-
-        var form = new FormData();
-        form.append("image_url", signedUrl);
+        var headers = form.getHeaders();
+        headers['X-Api-Key'] = process.env.REMOVEBG_API_KEY;
 
         const options = {
             url: 'https://api.remove.bg/v1.0/removebg',
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/form-data',
-                'X-Api-Key': process.env.REMOVEBG_API_KEY
-            },
-            data: form
+            method: 'post',
+            headers: headers,
+            data: form,
+            responseType: "utf8"
         };
         console.log('options');
         console.log(options);
-        var response;
+        var axiosResponse;
         try {
-            response = await axios(options);
+            axiosResponse = await axios(options);
+            console.log('response');
+            console.log(axiosResponse.data);
+            axiosResponse.headers['Content-Type'] = axiosResponse.headers['content-type'];
+            var response = {statusCode: axiosResponse.status, body: Buffer.from(axiosResponse.data).toString('base64'), headers:axiosResponse.headers, isBase64Encoded: true};
+            context.succeed(response);
+            return;
         } catch (error) {
-            console.log(error.response);
-            console.log(error.response.data.errors[0]);
-            return error.response;
-        }
-
-        // Upload the processed image to the -dest bucket
-        try {
-            const destparams = {
-                Bucket: dstBucket,
-                Key: dstKey,
-                Body: response,
-                ContentType: "image"
-            };
-
-            const putResult = await s3.putObject(destparams).promise();
-            console.log(putResult);
-
-        } catch (error) {
-            console.log(error);
+            console.log('error');
+            console.log(error.response.data.errors[0].detail);
+            context.fail({ statusCode: 500, body: error.response.data.errors[0].detail, headers });
             return;
         }
-
-        console.log('Successfully removed background from ' + srcBucket + '/' + srcKey +
-            ' and uploaded to ' + dstBucket + '/' + dstKey);
-
-        return "Success";
     } catch (err) {
-        console.log(err);
-        return err;
+        console.log('error');
+        console.log(err.message);
+        context.fail({ statusCode: 500, body: err, headers });
     }
 };
