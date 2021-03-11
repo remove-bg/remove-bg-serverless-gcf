@@ -105,3 +105,8 @@ exports.lambdaHandler = async (event, context) => {
         context.fail({ statusCode: 500, body: err, headers });
     }
 };
+
+/*
+curl -H 'X-API-Key: n8TwaHRjiasZVkA7HGGvEp8F' -F 'image_url=https://assets.orf.at/mims/2019/44/64/crops/w=800,q=70,r=1/350290_body_112064_ticker_meghan_afp.jpg?s=cb4a24ce5bb88c1c985c5451f90e2af8c4428d7a' -f https://api.remove.bg/v1.0/removebg -o no-bg.png
+curl -H 'X-API-Key: n8TwaHRjiasZVkA7HGGvEp8F' -F 'image_url=https://assets.orf.at/mims/2019/44/64/crops/w=800,q=70,r=1/350290_body_112064_ticker_meghan_afp.jpg?s=cb4a24ce5bb88c1c985c5451f90e2af8c4428d7a' -f localhost:3000/removebg -o no-bg-hin.png
+*/
