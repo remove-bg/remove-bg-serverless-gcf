@@ -2,15 +2,9 @@ const AWS = require('aws-sdk');
 const util = require('util');
 const FormData = require('form-data');
 const axios = require('axios');
-const busboy = require('busboy');
+const busboy = require('async-busboy');
 const fs = require('fs');
 
-const headers = {
-    'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'OPTIONS, POST',
-    'Access-Control-Allow-Headers': 'Content-Type'
-  };
 /**
  *
  * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
@@ -23,87 +17,94 @@ const headers = {
  * @returns {Object} object - API Gateway Lambda Proxy Output Format
  * 
  */
+
+const Busboy = require("busboy");
+const parseFormData = (event) => {
+  return new Promise((resolve, reject) => {
+    const busboy = new Busboy({
+      headers: {
+        ...event.headers,
+        "content-type":
+          event.headers["Content-Type"] || event.headers["content-type"],
+      },
+    });
+    const result = {
+      files: [],
+    };
+
+    busboy.on("file", (fieldname, file, filename, encoding, mimetype) => {
+      file.on("data", (data) => {
+        result.files.push({
+          file: data,
+          fileName: filename,
+          contentType: mimetype,
+        });
+      });
+    });
+    busboy.on("field", (fieldname, value) => {
+      try {
+        result[fieldname] = JSON.parse(value);
+      } catch (err) {
+        result[fieldname] = value;
+      }
+    });
+    busboy.on("error", (error) => reject(`Parse error: ${error}`));
+    busboy.on("finish", () => {
+      event.body = result;
+      resolve(event);
+    });
+    busboy.write(event.body, event.isBase64Encoded ? "base64" : "binary");
+    busboy.end();
+  });
+};
+
+
 exports.lambdaHandler = async (event, context) => {
-    console.log("lambda");
-    try {
-        if (Object.entries(event).length === 0) {
-            console.log("no event data");
-            return new Error("no event data");
-        }
-        var contentType = event.headers['Content-Type'] || event.headers['content-type'];
-        var bb = new busboy({ headers: { 'content-type': contentType } });
+  console.log("lambda");
+  try {
+    await parseFormData(event);
+    var form = new FormData();
 
-        var form = new FormData();
-        bb.on('file', function (fieldname, file, filename, encoding, mimetype) {
-            console.log('File [%s]: filename=%j; encoding=%j; mimetype=%j', fieldname, filename, encoding, mimetype);
-
-            file
-                .on('data', data => {
-                    console.log('File [%s] got %d bytes', fieldname, data.length);
-                })
-                .on('end', () => {
-                    console.log('File [%s] Finished', fieldname);
-                });
-        })
-            .on('field', (fieldname, val) => {
-                form.append(fieldname, val);
-                console.log(fieldname, val);
-            })
-            .on('finish', () => {
-                console.log('Done parsing form!');
-                //context.succeed({ statusCode: 200, body: 'all done', headers });
-            })
-            .on('error', err => {
-                console.log('failed', err);
-                context.fail({ statusCode: 500, body: err, headers });
-            });
-
-        bb.end(event.body);
-
-        const parser = require("lambda-multipart-parser");
-        const parsedEventData = await parser.parse(event, true);
-        if (parsedEventData.files.length>0) {
-            var err = "No file uploads supported";
-            console.log(err);
-
-            const { content, filename, contentType2 } = parsedEventData.files[0];
-            console.log(Object.keys(parsedEventData));
-    
-            return err;
-        }
-
-        var headers = form.getHeaders();
-        headers['X-Api-Key'] = process.env.REMOVEBG_API_KEY;
-
-        const options = {
-            url: 'https://api.remove.bg/v1.0/removebg',
-            method: 'post',
-            headers: headers,
-            data: form,
-            responseType: "utf8"
-        };
-        console.log('options');
-        console.log(options);
-        var axiosResponse;
-        try {
-            axiosResponse = await axios(options);
-            console.log('response');
-            console.log(axiosResponse.data);
-            axiosResponse.headers['Content-Type'] = axiosResponse.headers['content-type'];
-            var response = {statusCode: axiosResponse.status, body: Buffer.from(axiosResponse.data).toString('base64'), headers:axiosResponse.headers, isBase64Encoded: true};
-            context.succeed(response);
-            return;
-        } catch (error) {
-            console.log('error');
-            console.log(error.response.data.errors[0].detail);
-            context.fail({ statusCode: 500, body: error.response.data.errors[0].detail, headers });
-            return;
-        }
-    } catch (err) {
-        console.log('error');
-        console.log(err.message);
-        context.fail({ statusCode: 500, body: err, headers });
+    for (var i = 0; i < event.body.files; ++i) {
+      var file = event.body.files[i];
+      console.log(file);
     }
+    delete event.body.files;
+
+    Object.keys(event.body).forEach((key, index) => {
+      var val = event.body[key];
+      form.append(key, val);
+      console.log(key, val);
+    })
+
+    var axiosResponse;
+    try {
+      var options = {
+        method: 'post',
+        url: 'https://api.remove.bg/v1.0/removebg',
+        headers: {
+          'accept': 'image/*',
+          'X-API-Key': process.env.REMOVEBG_API_KEY,
+          'Content-Type': 'application/x-www-form-urlencoded',
+          ...form.getHeaders()
+        },
+        data: form, //Buffer.from(form).toString('base64'),
+        responseType: "arraybuffer"
+      };
+
+      axiosResponse = await axios(options);
+      console.log(axiosResponse);
+      axiosResponse.headers['Content-Type'] = axiosResponse.headers['content-type'];
+      var response = { statusCode: axiosResponse.status, body: axiosResponse.data.toString('base64'), isBase64Encoded: true, headers: {'content-type': axiosResponse.headers[content-type]} };
+      return(response);
+    } catch (error) {
+      console.log(error.response.data.errors[0].detail);
+      return ({ statusCode: response.status ? response.status : 500, body: JSON.stringify({ message: error.response.data.errors }) });
+    }
+  } catch (err) {
+    console.log(err.message);
+    return ({ statusCode: 500, body: JSON.stringify({ message: err }) });
+  }
 };
 
 /*
