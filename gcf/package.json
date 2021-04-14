@@ -1,0 +1,10 @@
+{
+  "name": "sample-http",
+  "version": "0.0.1",
+  "dependencies": {
+    "@google-cloud/functions-framework": "^1.7.1",
+    "async-busboy": "^1.0.1",
+    "axios": "^0.21.1",
+    "form-data": "^4.0.0"
+  }
+}
