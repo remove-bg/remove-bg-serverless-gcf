@@ -1,10 +1,8 @@
-const util = require('util');
 const FormData = require('form-data');
 const axios = require('axios');
-const busboy = require('async-busboy');
-const fs = require('fs');
-
 const Busboy = require("busboy");
+require('dotenv').config();
+
 const parseFormData = (event) => {
     return new Promise((resolve, reject) => {
         const busboy = new Busboy({
