@@ -1,6 +1,6 @@
 {
-  "name": "sample-http",
-  "version": "0.0.1",
+  "name": "remove-bg-serverless",
+  "version": "1.0.0",
   "scripts": {
     "start": "nodemon --inspect node_modules/@google-cloud/functions-framework --target=removebg"
   },
